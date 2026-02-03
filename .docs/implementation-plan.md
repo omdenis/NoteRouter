@@ -2,7 +2,18 @@
 
 ## Project Overview
 
-NoteRouter is a Python Telegram bot that automatically processes messages from specified Telegram groups, downloads media files, transcribes audio to text, and saves the results as Obsidian notes.
+NoteRouter is a C# .NET 10 Telegram bot that automatically processes messages from specified Telegram groups, downloads media files, transcribes audio to text using Whisper, and saves the results as Obsidian notes.
+
+---
+
+## Technology Stack
+
+- **Runtime**: .NET 10
+- **Language**: C# 14
+- **Database**: SQLite with Entity Framework Core
+- **Migrations**: EF Core Migrations (mandatory)
+- **Telegram**: Telegram.Bot library
+- **Transcription**: Whisper.net (local Whisper inference)
 
 ---
 
@@ -16,6 +27,7 @@ NoteRouter is a Python Telegram bot that automatically processes messages from s
                               ▼
                         ┌──────────────┐
                         │  SQLite DB   │
+                        │  (EF Core)   │
                         └──────────────┘
 ```
 
@@ -24,45 +36,49 @@ NoteRouter is a Python Telegram bot that automatically processes messages from s
 ## Components
 
 ### 1. Configuration Module
-- Load configuration from `.env` or config file
-- Environment variables:
-  - `BOT_KEY` - Telegram bot token (from environment variable)
-  - `CHAT_IDS` - Comma-separated list of allowed chat IDs
-  - `OBSIDIAN_PATH` - Path to Obsidian vault
-  - `MEDIA_PATH` - Path to store downloaded media
-  - `DAILY_NOTE` - Template path for daily notes (e.g., `/path/{YYYY}/{MM}/{YYYY-MM-DD}.md`)
+- Load configuration from `appsettings.json` and environment variables
+- Configuration properties:
+  - `BotKey` - Telegram bot token (from environment variable)
+  - `ChatIds` - Array of allowed chat IDs
+  - `ObsidianPath` - Path to Obsidian vault
+  - `MediaPath` - Path to store downloaded media
+  - `DailyNotePath` - Template path for daily notes (e.g., `/path/{YYYY}/{MM}/{YYYY-MM-DD}.md`)
+  - `WhisperModelPath` - Path to Whisper model file
 
-### 2. Database Module
-- SQLite local database
-- Table: `messages`
-  - `id` - Primary key
-  - `message_id` - Telegram message ID
-  - `chat_id` - Telegram chat ID
-  - `message_path` - Path to the original message
-  - `status` - Processing status (`new`, `in_progress`, `done`)
-  - `document_path` - Path to created Obsidian note
-  - `guid` - Unique identifier for the note
-  - `created_at` - Timestamp
+### 2. Database Layer (Entity Framework Core)
+- SQLite database with EF Core
+- Migrations are mandatory for schema management
+- Entity: `Message`
+  - `Id` - Primary key (int, auto-increment)
+  - `TelegramMessageId` - Telegram message ID (long)
+  - `ChatId` - Telegram chat ID (long)
+  - `MessageUrl` - URL to the original Telegram message
+  - `Status` - Processing status enum (`New`, `InProgress`, `Done`, `Failed`)
+  - `DocumentPath` - Path to created Obsidian note
+  - `Guid` - Unique identifier for the note
+  - `CreatedAt` - Timestamp
+  - `ProcessedAt` - Processing completion timestamp
 
-### 3. Telegram Module
-- Connect to Telegram API using bot token
+### 3. Telegram Service
+- Connect to Telegram API using Telegram.Bot
 - Fetch new messages from allowed chats only
 - Download media files (audio, voice, video, documents)
 - Send reply messages with processing results
 
-### 4. Media Processor
-- Download files to `MEDIA_PATH`
-- Filename format: `{datetime}_{chat_id}_{message_id}.{ext}`
+### 4. Media Downloader
+- Download files to `MediaPath`
+- Filename format: `{datetime:yyyyMMdd_HHmmss}_{chatId}_{messageId}.{ext}`
 - Support for various media types
 
-### 5. Transcription Module
-- Audio-to-text transcription
-- Options: OpenAI Whisper (local or API), or other STT service
+### 5. Transcription Service
+- Audio-to-text transcription using Whisper.net
+- Local inference with downloaded Whisper model
+- Support for multiple audio formats
 
 ### 6. Obsidian Note Generator
-- Create markdown notes in `OBSIDIAN_PATH/inbox`
-- Filename format: `{date}_{time}_{chat_id}.md`
-- Frontmatter properties:
+- Create markdown notes in `ObsidianPath/inbox`
+- Filename format: `{date}_{time}_{chatId}.md`
+- YAML frontmatter:
   ```yaml
   ---
   created: YYYY-MM-DD
@@ -71,64 +87,76 @@ NoteRouter is a Python Telegram bot that automatically processes messages from s
   ---
   ```
 
-### 7. Scheduler/Runner
-- Designed to run once per day (via cron or scheduler)
-- Process flow:
-  1. Fetch new messages
-  2. Save to database with `status = new`
-  3. Process each message sequentially
-  4. Update status and send replies
+### 7. Processing Pipeline
+- Orchestrates the entire flow
+- Handles status transitions
+- Error handling and retry logic
 
 ---
 
 ## Implementation Tasks
 
 ### Phase 1: Project Setup
-- [ ] Initialize Python project structure
-- [ ] Set up virtual environment
-- [ ] Create `pyproject.toml` or `requirements.txt`
-- [ ] Set up configuration loading (python-dotenv)
+- [ ] Create .NET 10 console application
+- [ ] Set up solution structure
+- [ ] Configure `appsettings.json` and user secrets
+- [ ] Add NuGet packages
+- [ ] Set up dependency injection
 
-### Phase 2: Database
-- [ ] Create SQLite database schema
-- [ ] Implement database connection/session management
-- [ ] Implement CRUD operations for messages table
-- [ ] Add migration support (optional)
+### Phase 2: Database with EF Core
+- [ ] Create `AppDbContext`
+- [ ] Define `Message` entity
+- [ ] Define `MessageStatus` enum
+- [ ] Create initial migration
+- [ ] Implement repository pattern (mandaroy)
+- [ ] Add migration on startup
 
-### Phase 3: Telegram Integration
-- [ ] Set up Telegram bot client (python-telegram-bot or Telethon)
-- [ ] Implement message fetching from specific chats
-- [ ] Implement chat ID validation (whitelist only)
+### Phase 3: Configuration
+- [ ] Create `AppSettings` class
+- [ ] Implement `IOptions<AppSettings>` pattern
+- [ ] Validate configuration on startup
+- [ ] Support environment variable overrides
+
+### Phase 4: Telegram Integration
+- [ ] Set up `TelegramBotClient`
+- [ ] Implement message fetching service
+- [ ] Implement chat ID whitelist validation
 - [ ] Implement media file downloading
 - [ ] Implement reply message sending
 
-### Phase 4: Media Processing
-- [ ] Implement file download to MEDIA_PATH
-- [ ] Generate unique filenames
+### Phase 5: Media Processing
+- [ ] Implement file download to MediaPath
+- [ ] Generate unique filenames - YYYY-MM-DD-chat_id-message_id
 - [ ] Handle different media types (audio, voice, video, images, documents)
+- [ ] File type detection
 
-### Phase 5: Transcription
-- [ ] Integrate speech-to-text service
-- [ ] Handle audio/voice message transcription
+### Phase 6: Whisper Transcription
+- [ ] Integrate Whisper.net
+- [ ] Download/configure Whisper model
+- [ ] Implement audio transcription service
+- [ ] Handle multiple audio formats (convert if needed)
 - [ ] Error handling for failed transcriptions
 
-### Phase 6: Obsidian Integration
-- [ ] Create note generator with frontmatter
+### Phase 7: Obsidian Integration
+- [ ] Create note generator service
+- [ ] Implement YAML frontmatter generation
 - [ ] Generate GUIDs for notes
 - [ ] Create Obsidian URI links
 - [ ] Save notes to inbox folder
 
-### Phase 7: Main Processing Pipeline
-- [ ] Implement main processing loop
-- [ ] Status management (new → in_progress → done)
-- [ ] Error handling and retry logic
+### Phase 8: Processing Pipeline
+- [ ] Implement main processing pipeline
+- [ ] Status management (New → InProgress → Done/Failed)
+- [ ] Transaction handling
+- [ ] Error handling and logging
 - [ ] Telegram reply with Obsidian link and GUID
 
-### Phase 8: Deployment
-- [ ] Create entry point script
-- [ ] Document cron job setup for daily execution
-- [ ] Add logging
-- [ ] Create example configuration file
+### Phase 9: Deployment
+- [ ] Create hosted service for scheduling
+- [ ] Document systemd/cron setup for daily execution
+- [ ] Add Serilog logging
+- [ ] Create example configuration
+- [ ] Write README
 
 ---
 
@@ -137,89 +165,209 @@ NoteRouter is a Python Telegram bot that automatically processes messages from s
 ```
 NoteRouter/
 ├── src/
-│   └── noterouter/
-│       ├── __init__.py
-│       ├── main.py              # Entry point
-│       ├── config.py            # Configuration loading
-│       ├── database/
-│       │   ├── __init__.py
-│       │   ├── models.py        # SQLAlchemy models
-│       │   └── repository.py    # Database operations
-│       ├── telegram/
-│       │   ├── __init__.py
-│       │   ├── client.py        # Telegram bot client
-│       │   └── downloader.py    # Media downloader
-│       ├── processing/
-│       │   ├── __init__.py
-│       │   ├── transcriber.py   # Audio transcription
-│       │   └── pipeline.py      # Processing pipeline
-│       └── obsidian/
-│           ├── __init__.py
-│           └── note_generator.py # Note creation
+│   └── NoteRouter/
+│       ├── Program.cs
+│       ├── NoteRouter.csproj
+│       ├── appsettings.json
+│       ├── appsettings.Development.json
+│       │
+│       ├── Configuration/
+│       │   └── AppSettings.cs
+│       │
+│       ├── Data/
+│       │   ├── AppDbContext.cs
+│       │   ├── Entities/
+│       │   │   └── Message.cs
+│       │   ├── Enums/
+│       │   │   └── MessageStatus.cs
+│       │   └── Migrations/
+│       │       └── (EF Core migrations)
+│       │
+│       ├── Services/
+│       │   ├── ITelegramService.cs
+│       │   ├── TelegramService.cs
+│       │   ├── IMediaDownloader.cs
+│       │   ├── MediaDownloader.cs
+│       │   ├── ITranscriptionService.cs
+│       │   ├── TranscriptionService.cs
+│       │   ├── IObsidianService.cs
+│       │   ├── ObsidianService.cs
+│       │   ├── IProcessingPipeline.cs
+│       │   └── ProcessingPipeline.cs
+│       │
+│       └── Workers/
+│           └── ProcessingWorker.cs
+│
 ├── tests/
+│   └── NoteRouter.Tests/
+│       └── NoteRouter.Tests.csproj
+│
 ├── docs/
-├── .env.example
-├── pyproject.toml
+├── NoteRouter.sln
 └── README.md
 ```
 
 ---
 
-## Dependencies
+## NuGet Packages
 
-- `python-telegram-bot` or `telethon` - Telegram API
-- `python-dotenv` - Environment configuration
-- `sqlalchemy` - Database ORM
-- `openai-whisper` or `openai` - Audio transcription
-- `pydantic` - Data validation
-- `uuid` - GUID generation
+```xml
+<!-- Telegram -->
+<PackageReference Include="Telegram.Bot" Version="22.*" />
+
+<!-- Entity Framework Core -->
+<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.*" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.*" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*" />
+
+<!-- Whisper -->
+<PackageReference Include="Whisper.net" Version="1.*" />
+<PackageReference Include="Whisper.net.Runtime" Version="1.*" />
+
+<!-- Configuration & DI -->
+<PackageReference Include="Microsoft.Extensions.Hosting" Version="10.*" />
+<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.*" />
+<PackageReference Include="Microsoft.Extensions.Options" Version="10.*" />
+
+<!-- Logging -->
+<PackageReference Include="Serilog" Version="4.*" />
+<PackageReference Include="Serilog.Extensions.Hosting" Version="8.*" />
+<PackageReference Include="Serilog.Sinks.Console" Version="6.*" />
+<PackageReference Include="Serilog.Sinks.File" Version="6.*" />
+```
+
+---
+
+## Database Schema
+
+### Message Entity
+
+```csharp
+public class Message
+{
+    public int Id { get; set; }
+    public long MessageId { get; set; }
+    public long ChatId { get; set; }
+    public string? MessageUrl { get; set; }
+    public string? MediaPath { get; set; }
+    public MessageStatus Status { get; set; }
+    public string? Path { get; set; }
+    public Guid Guid { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? ProcessedAt { get; set; }
+}
+
+public enum MessageStatus
+{
+    New = 0,
+    InProgress = 1,
+    Done = 2,
+    Failed = 3
+}
+```
+
+### Migration Commands
+
+```bash
+# Create migration
+dotnet ef migrations add InitialCreate
+
+# Update database
+dotnet ef database update
+
+# Generate SQL script
+dotnet ef migrations script
+```
 
 ---
 
 ## Processing Flow
 
 ```
-1. START (scheduled daily)
+1. START (scheduled daily or via hosted service)
    │
-2. ├─▶ Connect to Telegram
+2. ├─▶ Apply pending EF Core migrations
    │
-3. ├─▶ Fetch messages from allowed CHAT_IDS
+3. ├─▶ Connect to Telegram
+   │
+4. ├─▶ Fetch messages from allowed ChatIds
    │    └─▶ Ignore messages from other chats
    │
-4. ├─▶ For each new message:
-   │    └─▶ Save to DB (status = new)
+5. ├─▶ For each new message:
+   │    └─▶ Save to DB (Status = New)
    │
-5. ├─▶ For each unprocessed message (status != done):
+6. ├─▶ For each unprocessed message (Status != Done):
    │    │
-   │    ├─▶ Update status = in_progress
+   │    ├─▶ Update Status = InProgress
    │    │
-   │    ├─▶ Download media to MEDIA_PATH
-   │    │    └─▶ Filename: {datetime}_{chat_id}_{message_id}
+   │    ├─▶ Download media to MediaPath
+   │    │    └─▶ Filename: {datetime}_{chatId}_{messageId}
    │    │
-   │    ├─▶ Transcribe audio (if applicable)
+   │    ├─▶ Transcribe audio using Whisper.net
    │    │
    │    ├─▶ Create Obsidian note
-   │    │    ├─▶ Add frontmatter (created, id, url)
-   │    │    └─▶ Save to OBSIDIAN_PATH/inbox
+   │    │    ├─▶ Add YAML frontmatter (created, id, url)
+   │    │    └─▶ Save to ObsidianPath/inbox
    │    │
-   │    ├─▶ Update DB (status = done, path = note_path)
+   │    ├─▶ Update DB (Status = Done, DocumentPath = note_path)
    │    │
    │    └─▶ Reply to Telegram message with link + GUID
    │
-6. └─▶ END
+7. └─▶ END
 ```
 
 ---
 
 ## Configuration Example
 
-```ini
-# .env
-BOT_KEY=${TELEGRAM_BOT_TOKEN}
-CHAT_IDS=1123123,1313132,42423
-OBSIDIAN_PATH=/home/user/Documents/ObsidianVault
-MEDIA_PATH=/home/user/Documents/ObsidianVault/media
-DAILY_NOTE=/home/user/Documents/ObsidianVault/{YYYY}/{MM}/{YYYY-MM-DD}.md
+### appsettings.json
+
+```json
+{
+  "AppSettings": {
+    "BotKey": "{NAME_ENV_VARIABLE_TO_GET_KEY}",
+    "ChatIds": [1123123, 1313132, 42423],
+    "ObsidianPath": "/home/user/Documents/ObsidianVault",
+    "MediaPath": "/home/user/Documents/ObsidianVault/media",
+    "DailyNotePath": "{ObsidianPath}/{yyyy}/{MM}/{yyyy-MM-dd}.md",
+    "WhisperModelPath": "./models/ggml-base.bin"
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=noterouter.db"
+  },
+  "Serilog": {
+    "MinimumLevel": "Information",
+    "WriteTo": [
+      { "Name": "Console" },
+      { "Name": "File", "Args": { "path": "logs/log-.txt", "rollingInterval": "Day" } }
+    ]
+  }
+}
+```
+
+### Environment Variables
+
+```bash
+export APPSETTINGS__BOTKEY="your-telegram-bot-token"
+# Or use user-secrets for development
+dotnet user-secrets set "AppSettings:BotKey" "your-telegram-bot-token"
+```
+
+---
+
+## Whisper Model Setup
+
+Download a Whisper model (ggml format) for Whisper.net:
+
+```bash
+# Base model (~150MB) - good balance of speed/accuracy
+wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+
+# Small model (~500MB) - better accuracy
+wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin
+
+# Tiny model (~75MB) - fastest, lower accuracy
+wget https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin
 ```
 
 ---
@@ -227,7 +375,9 @@ DAILY_NOTE=/home/user/Documents/ObsidianVault/{YYYY}/{MM}/{YYYY-MM-DD}.md
 ## Notes
 
 - Bot must be added to the Telegram groups it needs to monitor
-- Only messages from whitelisted `CHAT_IDS` will be processed
-- Transcription service may require additional API keys (e.g., OpenAI)
-- Consider rate limiting for Telegram API calls
+- Only messages from whitelisted `ChatIds` will be processed
+- Whisper.net runs locally - no external API required
+- Consider using `IHostedService` for background processing
+- EF Core migrations run automatically on startup
 - Implement proper error handling for network failures
+- Consider rate limiting for Telegram API calls
