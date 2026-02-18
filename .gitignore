@@ -1,1 +1,3 @@
-.docs/ver1.md
+**/bin/*
+**/obj/*
+**/logs/*

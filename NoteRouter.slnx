@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/">
+    <Project Path="NoteRouter/NoteRouter.csproj" />
+  </Folder>
+  <Folder Name="/">
+    <Project Path="NoteRouter.Tests/NoteRouter.Tests.csproj" />
+  </Folder>
+</Solution>
